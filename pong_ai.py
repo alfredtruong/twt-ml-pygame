@@ -1,7 +1,16 @@
+# for base game
 import pygame
 import random
 import math
 
+# for neat
+import neat
+import os
+import pickle
+
+##########################################
+# code for pong
+##########################################
 pygame.init()
 
 WHITE = (255, 255, 255)
@@ -23,7 +32,7 @@ class Paddle:
         self.x = self.original_x
         self.y = self.original_y
 
-    def draw(self, win):
+    def draw_paddle(self, win):
         pygame.draw.rect(
             win,
             self.COLOR,
@@ -54,32 +63,52 @@ class Ball:
         self.y = self.y_original
 
         # direction
-        angle = random.randrange(1,30) # random positive angle between 1 and 30
+        angle = random.randrange(5,30) # random positive angle between 1 and 30
         angle = math.radians(angle) # in radians
 
         self.x_vel = self.MAX_VEL * math.cos(angle) * (1 if self.x_vel < 0 else -1) # flip direction
         self.y_vel = self.MAX_VEL * math.sin(angle) * (1 if random.random() < 0.5 else -1) # up or down
 
-    def draw(self, win):
-        pygame.draw.circle(win, self.COLOR, (self.x, self.y), self.radius)
+    def draw_ball(self, win):
+        pygame.draw.circle(
+            win,
+            self.COLOR,
+            (self.x, self.y),
+            self.radius
+        )
 
     def move(self):
         self.x += self.x_vel
         self.y += self.y_vel
 
 
+class Stats:
+    def __init__(self):
+        self.left_hits = 0
+        self.right_hits = 0
+        self.left_score = 0
+        self.right_score = 0
+
+    def reset(self):
+        self.left_hits = 0
+        self.right_hits = 0
+        self.left_score = 0
+        self.right_score = 0
+
+
 class Pong:
-    WIDTH = 700
-    HEIGHT = 500
     PADDLE_WIDTH = 20
     PADDLE_HEIGHT = 100
     BALL_RADIUS = 15
     WINNING_SCORE = 5
+    SCORE_FONT = pygame.font.SysFont("comicsans", 50)
 
-    def __init__(self):
-        self.win = pygame.display.set_mode((self.WIDTH, self.HEIGHT))
-        pygame.display.set_caption("Pong")
-        self.SCORE_FONT = pygame.font.SysFont("comicsans", 50)
+    def __init__(self, win, win_width, win_height, should_draw):
+        # plotting device
+        self.win = win
+        self.WIDTH = win_width
+        self.HEIGHT = win_height
+        self.should_draw = should_draw
 
         # init stats
         self.stats = Stats()
@@ -100,21 +129,29 @@ class Pong:
         self.reset_board()
         self.stats.reset()
 
-    def draw(self):
+    def draw_game(self, draw_scores=True, draw_hits=False):
         self.win.fill(BLACK)
 
         # draw scores
-        left_score_text = self.SCORE_FONT.render(f"{self.stats.left_score}", 1, WHITE)
-        right_score_text = self.SCORE_FONT.render(f"{self.stats.right_score}", 1, WHITE)
-        self.win.blit(left_score_text, ((self.WIDTH // 4) - left_score_text.get_width() // 2, 20))
-        self.win.blit(right_score_text, ((3 * self.WIDTH // 4) - right_score_text.get_width() // 2, 20))
+        if draw_scores:
+            left_text = self.SCORE_FONT.render(f"{self.stats.left_score}", 1, WHITE)
+            right_text = self.SCORE_FONT.render(f"{self.stats.right_score}", 1, WHITE)
+            self.win.blit(left_text, ((self.WIDTH // 4) - left_text.get_width() // 2, 20))
+            self.win.blit(right_text, ((3 * self.WIDTH // 4) - right_text.get_width() // 2, 20))
+
+        # draw hits
+        if draw_hits:
+            left_text = self.SCORE_FONT.render(f"{self.stats.left_hits}", 1, WHITE)
+            right_text = self.SCORE_FONT.render(f"{self.stats.right_hits}", 1, WHITE)
+            self.win.blit(left_text, ((self.WIDTH // 4) - left_text.get_width() // 2, 20))
+            self.win.blit(right_text, ((3 * self.WIDTH // 4) - right_text.get_width() // 2, 20))
 
         # draw paddles
-        self.left_paddle.draw(self.win)
-        self.right_paddle.draw(self.win)
+        self.left_paddle.draw_paddle(self.win)
+        self.right_paddle.draw_paddle(self.win)
 
         # draw ball
-        self.ball.draw(self.win)
+        self.ball.draw_ball(self.win)
 
         # draw divider
         for i in range(10, self.HEIGHT, self.HEIGHT // 20):
@@ -128,18 +165,8 @@ class Pong:
     def single_paddle_movement(self, paddle, is_up):
         if is_up and (paddle.y - paddle.VEL >= 0):
             paddle.move(is_up)
-        elif (paddle.y + paddle.VEL + paddle.height <= self.HEIGHT):
+        elif not is_up and (paddle.y + paddle.VEL + paddle.height <= self.HEIGHT):
             paddle.move(is_up)
-
-    def handle_paddle_movements(self, keys):
-        if keys[pygame.K_w]:
-            self.single_paddle_movement(self.left_paddle, True)
-        if keys[pygame.K_s]:
-            self.single_paddle_movement(self.left_paddle, False)
-        if keys[pygame.K_UP]:
-            self.single_paddle_movement(self.right_paddle, True)
-        if keys[pygame.K_DOWN]:
-            self.single_paddle_movement(self.right_paddle, False)
 
     def handle_collision(self):
         # check collide top
@@ -155,6 +182,8 @@ class Pong:
             # left paddle
             if self.left_paddle.y <= self.ball.y <= self.left_paddle.y + self.left_paddle.height:
                 if self.ball.x - self.ball.radius <= self.left_paddle.x + self.left_paddle.width:
+                    self.stats.left_hits += 1
+
                     # handle x direction
                     self.ball.x_vel *= -1
 
@@ -167,6 +196,8 @@ class Pong:
             # right paddle
             if self.right_paddle.y <= self.ball.y <= self.right_paddle.y + self.right_paddle.height:
                 if self.ball.x + self.ball.radius >= self.right_paddle.x:
+                    self.stats.right_hits += 1
+
                     # handle x direction
                     self.ball.x_vel *= -1
 
@@ -178,13 +209,17 @@ class Pong:
 
     def handle_keyboard_input(self):
         keys = pygame.key.get_pressed()
-        self.handle_paddle_movements(keys)
 
-    def step_frame(self):
-        self.handle_collision()
-        self.ball.move()
+        if keys[pygame.K_w]:
+            self.single_paddle_movement(self.left_paddle, True)
+        if keys[pygame.K_s]:
+            self.single_paddle_movement(self.left_paddle, False)
+        if keys[pygame.K_UP]:
+            self.single_paddle_movement(self.right_paddle, True)
+        if keys[pygame.K_DOWN]:
+            self.single_paddle_movement(self.right_paddle, False)
 
-        # score detection
+    def score_detection(self):
         if self.ball.x < 0:
             self.stats.right_score += 1
             self.reset_board()
@@ -200,43 +235,197 @@ class Pong:
         if self.stats.right_score == self.WINNING_SCORE:
             self.reset_game()
 
-
-class Stats:
-    def __init__(self):
-        self.left_hits = 0
-        self.right_hits = 0
-        self.left_score = 0
-        self.right_score = 0
-
-    def reset(self):
-        self.left_hits = 0
-        self.right_hits = 0
-        self.left_score = 0
-        self.right_score = 0
+    def loop(self):
+        self.handle_collision()
+        self.ball.move()
+        self.score_detection()
 
 
+##########################################
+# window setup
+##########################################
+WIDTH = 700
+HEIGHT = 500
+WIN = pygame.display.set_mode((WIDTH, HEIGHT))
+pygame.display.set_caption("Pong")
 FPS = 60
 
 
-def main():
-    run = True
+# human pong
+def pong(should_draw = True):
+    game = Pong(WIN, WIDTH, HEIGHT, should_draw)
     clock = pygame.time.Clock()  # result FPS
-    game = Pong()
 
+    run = True
     while run:
         clock.tick(FPS)
-        game.draw()
 
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 run = False
                 break
 
+        # game input
         game.handle_keyboard_input()
-        game.step_frame()
+
+        # game logic
+        game.loop()
+
+        # display
+        if should_draw:
+            game.draw_game()
 
     pygame.quit()
 
+# ai pong training
+class PongAI:
+    def __init__(self, win, width, height, should_draw):
+        self.game = Pong(win, width, height, should_draw)
+        self.should_draw = should_draw
+        self.clock = pygame.time.Clock()  # result FPS
+
+    def train_ai(self, genome1, genome2, config):
+        net1 = neat.nn.FeedForwardNetwork.create(genome1, config)
+        net2 = neat.nn.FeedForwardNetwork.create(genome2, config)
+
+        run = True
+        while run:
+            for event in pygame.event.get():
+                if event.type == pygame.QUIT:
+                    quit()
+
+            # game input
+            output1 = net1.activate((self.game.left_paddle.y, self.game.ball.y, abs(self.game.left_paddle.x - self.game.ball.x)))
+            output2 = net2.activate((self.game.right_paddle.y, self.game.ball.y, abs(self.game.right_paddle.x - self.game.ball.x)))
+            #print(output1, output2)
+
+            decision1 = output1.index(max(output1))
+            if decision1 == 0:
+                pass
+            elif decision1 == 1:
+                self.game.single_paddle_movement(self.game.left_paddle, True)
+            elif decision1 == 2:
+                self.game.single_paddle_movement(self.game.left_paddle, False)
+
+            decision2 = output2.index(max(output2))
+            if decision2 == 0:
+                pass
+            elif decision2 == 1:
+                self.game.single_paddle_movement(self.game.right_paddle, True)
+            elif decision2 == 2:
+                self.game.single_paddle_movement(self.game.right_paddle, False)
+
+            # game logic
+            self.game.loop()
+
+            # display
+            if self.should_draw:
+                self.game.draw_game(False, True)
+
+            if self.game.stats.left_score >= 1 or self.game.stats.right_score >= 1 or self.game.stats.left_hits > 50:
+                self.calculate_fitness(genome1, genome2, self.game.stats)
+                break
+
+    def calculate_fitness(self, genome1, genome2, stats):
+        genome1.fitness += stats.left_hits
+        genome2.fitness += stats.right_hits
+
+
+    def test_ai(self, genome, config):
+        net = neat.nn.FeedForwardNetwork.create(genome, config)
+
+        run = True
+        while run:
+            self.clock.tick(FPS)
+
+            for event in pygame.event.get():
+                if event.type == pygame.QUIT:
+                    run = False
+                    break
+
+            # game input
+            self.game.handle_keyboard_input()
+
+            output2 = net.activate((self.game.right_paddle.y, self.game.ball.y, abs(self.game.right_paddle.x - self.game.ball.x)))
+            decision2 = output2.index(max(output2))
+            if decision2 == 0:
+                pass
+            elif decision2 == 1:
+                self.game.single_paddle_movement(self.game.right_paddle, True)
+            elif decision2 == 2:
+                self.game.single_paddle_movement(self.game.right_paddle, False)
+
+            # game logic
+            self.game.loop()
+
+            # display
+            self.game.draw_game()
+
+        pygame.quit()
+
+
+def eval_genomes(genomes, config):
+    # train one guy against all others
+    for i, (genome_id1, genome1) in enumerate(genomes):
+        # initialize fitness
+        genome1.fitness = 0
+
+        # look at other but not past end
+        if i == len(genomes) - 1:
+            break
+
+        for j, (genome_id2, genome2) in enumerate(genomes[i+1:]):
+            # initialize fitness
+            genome2.fitness = 0 if genome2.fitness is None else genome2.fitness
+
+            # info
+            #print(f"combo [{i}, {j}], left_fitness = {genome1.fitness}")
+
+            game = PongAI(WIN, WIDTH, HEIGHT, False)
+            game.train_ai(genome1, genome2, config)
+
+def run_neat(config):
+    # get current population
+    #p = neat.Checkpointer.restore_checkpoint('pong_ai_checkpoints/pong_ai_27')
+    p = neat.Population(config)
+
+    # specify dump stats
+    p.add_reporter(neat.StdOutReporter(True))
+    stats = neat.StatisticsReporter()
+    p.add_reporter(stats)
+    p.add_reporter(neat.Checkpointer(1, filename_prefix="pong_ai_checkpoints/pong_ai_"))
+
+    winner = p.run(eval_genomes, 20)  # fitness function
+
+    with open("pong_ai_checkpoints/best.pickle","wb") as f:
+        pickle.dump(winner, f)
+
+def test_ai(config):
+    with open("pong_ai_checkpoints/best.pickle","rb") as f:
+        winner = pickle.load(f)
+
+    game = PongAI(WIN, WIDTH, HEIGHT, True)
+    game.test_ai(winner, config)
 
 if __name__ == "__main__":
-    main()
+    should_with_ai = True
+    should_test_ai = True
+
+    if should_with_ai:
+        local_dir = os.path.dirname(__file__)
+        config_path = os.path.join(local_dir, "pong_ai_neat_config.txt")
+
+        config = neat.Config(
+            neat.DefaultGenome,
+            neat.DefaultReproduction,
+            neat.DefaultSpeciesSet,
+            neat.DefaultStagnation,
+            config_path
+        )
+
+        if not should_test_ai:
+            run_neat(config)
+        else:
+            test_ai(config)
+    else:
+        pong()
