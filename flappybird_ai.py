@@ -12,7 +12,7 @@ import random
 pygame.font.init()
 
 WIN_WIDTH = 500
-WIN_HEIGHT = 800
+WIN_HEIGHT = 600
 
 BIRD_IMGS = [
     pygame.transform.scale2x(pygame.image.load(os.path.join("flappybird_ai_imgs", "bird1.png"))),
@@ -31,9 +31,9 @@ class Bird:
     Bird class representing the flappy bird
     """
     IMGS = BIRD_IMGS
-    MAX_ROTATION = 25 # max attack angle
-    ROT_VEL = 20 # speed of rotation
-    ANIMATION_TIME = 5 # how long each image shows for
+    MAX_ROTATION = 25  # max attack angle
+    ROT_VEL = 20  # speed of rotation
+    ANIMATION_TIME = 5  # how long each image shows for
 
     def __init__(self, x, y):
         self.x = x # starting position
@@ -110,7 +110,7 @@ class Bird:
 # single pipe
 class Pipe:
     GAP = 200
-    VEL = 5 # speed to approach bird
+    VEL = 5  # speed to approach bird
 
     def __init__(self, x):
         self.x = x
@@ -126,7 +126,7 @@ class Pipe:
         self.set_height()
 
     def set_height(self):
-        self.height = random.randrange(50, 450)
+        self.height = random.randrange(50, 250)
         self.top = self.height - self.PIPE_TOP.get_height()
         self.bottom = self.height + self.GAP
 
@@ -180,7 +180,7 @@ class Base:
         win.blit(self.IMG, (self.x2, self.y))
 
 def draw_window(win, birds, pipes, base, score):
-    win.blit(BG_IMG, (0,0))
+    win.blit(BG_IMG, (0, 0))
 
     for pipe in pipes:
         pipe.draw(win)
@@ -207,16 +207,16 @@ def main(genomes,config):
         g.fitness = 0
         ge.append(g)
 
-    base = Base(730)
-    pipes = [Pipe(600)]
+    base = Base(530)
+    pipes = [Pipe(500)]
     win = pygame.display.set_mode((WIN_WIDTH, WIN_HEIGHT))
-    clock = pygame.time.Clock() # make game run at sensible time
+    clock = pygame.time.Clock()  # make game run at sensible time
 
     score = 0
 
     run = True
     while run:
-        clock.tick(60)
+        clock.tick(30)
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 run = False
@@ -273,7 +273,7 @@ def main(genomes,config):
             for g in ge:
                 g.fitness += 5
 
-            pipes.append(Pipe(600))
+            pipes.append(Pipe(500))
 
         for r in rem:
             pipes.remove(r)
